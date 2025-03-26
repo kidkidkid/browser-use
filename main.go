@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"lizhanpeng.org/lizhanpeng/agent/browser"
 )
 
@@ -14,14 +16,18 @@ func main() {
 	// b.GoogleSearch(&browser.GoogleSearchAction{
 	// 	Query: "今天上海的天气",
 	// })
+	// b.GoToUrlInCurrentTab(&browser.GoToUrlInCurrentTabParam{
+	// 	Url: "file:///private/tmp/test.html",
+	// })
 	b.GoToUrlInCurrentTab(&browser.GoToUrlInCurrentTabParam{
-		Url: "file:///private/tmp/test.html",
+		Url: "http://www.baidu.com",
 	})
 	b.Wait(&browser.WaitScondsParam{
 		Seconds: 1,
 	})
-	b.DomService.RemoveHightLights()
 	b.UpdateState()
+	fmt.Println(b.CachedState.ElemmentTree.GetCliableElementsString())
+	return
 	for id, node := range b.GetState().DomState.SelectorMap {
 		// if node.Attributes["href"] == "" {
 		// 	continue

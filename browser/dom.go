@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type DomService struct {
@@ -102,6 +103,17 @@ type DomTextNode struct {
 	DomNode
 }
 
+func (d *DomTextNode) hasParentWithHighlight() bool {
+	current := d.Parent
+	for current != nil {
+		if current.HighlightIndex != nil {
+			return true
+		}
+		current = current.Parent
+	}
+	return false
+}
+
 type DomElementNode struct {
 	TagName             string            `json:"tagName"`
 	XPath               string            `json:"xpath"`
@@ -125,6 +137,84 @@ type DomTree struct {
 }
 
 type SelectorMap = map[int]*DomElementNode
+
+func (d *DomElementNode) GetCliableElementsString() string {
+	includeAttributes := map[string]bool{
+		"title":         true,
+		"type":          true,
+		"name":          true,
+		"role":          true,
+		"tabindex":      true,
+		"aria-label":    true,
+		"placeholder":   true,
+		"value":         true,
+		"alt":           true,
+		"aria-expanded": true,
+	}
+	formatedStrs := make([]string, 0)
+	var processFn func(node DomNodeI, depth int)
+	processFn = func(node DomNodeI, depth int) {
+		if eNode, ok := node.(*DomElementNode); ok {
+			if eNode.HighlightIndex != nil {
+				attributes := make([]string, 0)
+				text := d.getAllTextTillNextClickableElement(-1)
+				for key, val := range eNode.Attributes {
+					if !includeAttributes[key] {
+						continue
+					} else if val == eNode.TagName {
+						continue
+					}
+					attributes = append(attributes, val)
+				}
+				line := fmt.Sprintf("[%d]<%s ", *eNode.HighlightIndex, eNode.TagName)
+				attributesStr := strings.Join(attributes, ";")
+				if attributesStr != "" {
+					line += fmt.Sprintf("{%s}", attributesStr)
+				}
+				if text != "" {
+					if attributesStr != "" {
+						line += fmt.Sprintf(">%s", text)
+					} else {
+						line += text
+					}
+				}
+				line += "/>"
+				formatedStrs = append(formatedStrs, line)
+			}
+			for _, child := range eNode.Childrens {
+				processFn(child, depth+1)
+			}
+		} else if tNode, ok := node.(*DomTextNode); ok {
+			if tNode.IsVisvable && !tNode.hasParentWithHighlight() {
+				formatedStrs = append(formatedStrs, tNode.Text)
+			}
+		}
+	}
+	processFn(d, 0)
+	return strings.Join(formatedStrs, "\n")
+}
+
+func (d *DomElementNode) getAllTextTillNextClickableElement(maxDepth int) string {
+	textParts := make([]string, 0)
+	var collectFn func(node DomNodeI, depth int)
+	collectFn = func(node DomNodeI, depth int) {
+		if maxDepth != -1 && depth > maxDepth {
+			return
+		}
+		if eNode, ok := node.(*DomElementNode); ok {
+			if eNode != d && eNode.HighlightIndex != nil {
+				return
+			}
+			for _, child := range eNode.Childrens {
+				collectFn(child, depth+1)
+			}
+		} else if tNode, ok := node.(*DomTextNode); ok {
+			textParts = append(textParts, tNode.Text)
+		}
+	}
+	collectFn(d, 0)
+	return strings.Trim(strings.Join(textParts, "\n"), " ")
+}
 
 func ParseDomNode(mp map[string]any) DomNodeI {
 	if mp == nil {
